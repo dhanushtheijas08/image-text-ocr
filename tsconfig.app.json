@@ -23,5 +23,5 @@
     "skipLibCheck": true,
     "noUncheckedSideEffectImports": true
   },
-  "include": ["src"]
+  "include": ["src", "public/tesseract-core.wasm.js"]
 }
