@@ -71,7 +71,7 @@ function App() {
 
     chrome.runtime.sendMessage(
       {
-        type: "CAPTURE_SCREEN",
+        type: "TAKE_SCREENSHOT", // Changed from CAPTURE_SCREEN to TAKE_SCREENSHOT
         rect,
       },
       (res) => {
@@ -154,10 +154,21 @@ function App() {
     }
 
     const croppedDataUrl = canvas.toDataURL("image/png");
-    chrome.runtime.sendMessage({
-      type: "SAVE_IMAGE",
-      dataUrl: croppedDataUrl,
-    });
+    // chrome.runtime.sendMessage({
+    //   type: "SAVE_IMAGE",
+    //   dataUrl: croppedDataUrl,
+    // });
+
+    chrome.runtime.sendMessage(
+      {
+        type: "TRIGGER_OCR",
+        imageData: croppedDataUrl,
+      },
+      (response) => {
+        if (response.error) console.error(response.error);
+        else console.log("Extracted text:", response.text);
+      }
+    );
 
     console.log("✅ Cropped and sent to background for download");
   };
@@ -212,6 +223,23 @@ function App() {
     };
   }, [rect]); // Add rect to dependencies
 
+  const parseHTML = () => {
+    chrome.runtime.sendMessage(
+      {
+        type: "PARSE_HTML", // Changed from OCR_IMAGE to PARSE_HTML
+        html: "<div>Hello <b>World</b>!</div>",
+      },
+      (response) => {
+        if (!response) {
+          console.error("No response received", chrome.runtime.lastError);
+          return;
+        }
+
+        console.log("response", response);
+      }
+    );
+  };
+
   return (
     <div className="popup-container">
       {toggle && (
@@ -248,6 +276,7 @@ function App() {
           </div>
         </div>
       )}
+      <button onClick={parseHTML}>Parse HTML</button>
     </div>
   );
 }

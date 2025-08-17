@@ -21,7 +21,15 @@ export default defineManifest({
       run_at: "document_idle",
     },
   ],
-  permissions: ["tabs", "activeTab", "scripting", "tabCapture", "downloads"],
+  permissions: [
+    "tabs",
+    "activeTab",
+    "scripting",
+    "tabCapture",
+    "downloads",
+    "offscreen",
+  ],
+
   background: {
     service_worker: "src/background.ts",
   },
@@ -29,11 +37,15 @@ export default defineManifest({
   web_accessible_resources: [
     {
       resources: [
-        "worker.min.js",
-        "tesseract-core.wasm.js",
-        "eng.traineddata.gz",
+        "src/offscreen/tesseract/worker.min.js",
+        "src/offscreen/tesseract/tesseract-core.wasm.js",
+        "src/offscreen/tesseract/tesseract.min.js",
+        "src/offscreen/tesseract/eng.traineddata.gz",
       ],
       matches: ["<all_urls>"],
     },
   ],
+  content_security_policy: {
+    extension_pages: "script-src 'self' 'wasm-unsafe-eval'; object-src 'self';",
+  },
 });
