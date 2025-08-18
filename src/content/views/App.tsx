@@ -159,14 +159,20 @@ function App() {
     //   dataUrl: croppedDataUrl,
     // });
 
+    console.log("Sending message to background for OCR");
+
     chrome.runtime.sendMessage(
       {
         type: "TRIGGER_OCR",
         imageData: croppedDataUrl,
       },
       (response) => {
-        if (response.error) console.error(response.error);
-        else console.log("Extracted text:", response.text);
+        if (!response) {
+          console.error("No response received", chrome.runtime.lastError);
+          return;
+        }
+
+        console.log("response", response);
       }
     );
 

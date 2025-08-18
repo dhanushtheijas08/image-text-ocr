@@ -1,4 +1,6 @@
 const OFFSCREEN_DOCUMENT_PATH = "src/offscreen/offscreen.html";
+const pendingOcrRequests: Record<string, Function> = {};
+
 console.log("from background");
 
 // Offscreen document management
@@ -111,23 +113,67 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   // Handle TRIGGER_OCR message from content script
+  // if (message.type === "TRIGGER_OCR") {
+  //   console.log("[BACKGROUND] Processing OCR trigger");
+
+  //   sendToOffscreen<{ result: string }>({
+  //     type: "OCR_IMAGE",
+  //     imageData: message.imageData,
+  //   })
+  //     .then((response) => {
+  //       console.log("OCR result:", response);
+  //       sendResponse({ success: true, text: response.result });
+  //     })
+  //     .catch((error) => {
+  //       console.error("Offscreen error:", error);
+  //       sendResponse({ success: false, error: error.message });
+  //     });
+
+  //   return true; // Keep the message channel open for async response
+  // }
+
   if (message.type === "TRIGGER_OCR") {
     console.log("[BACKGROUND] Processing OCR trigger");
+    const requestId =
+      Date.now().toString() + Math.random().toString(36).substr(2, 5);
 
-    sendToOffscreen<{ result: string }>({
+    // Store response callback
+    pendingOcrRequests[requestId] = sendResponse;
+
+    // Forward to offscreen with request ID
+    sendToOffscreen({
       type: "OCR_IMAGE",
       imageData: message.imageData,
-    })
-      .then((response) => {
-        console.log("OCR result:", response);
-        sendResponse({ success: true, text: response.result });
-      })
-      .catch((error) => {
-        console.error("Offscreen error:", error);
-        sendResponse({ success: false, error: error.message });
-      });
+      requestId,
+    }).catch((error) => {
+      console.error("Offscreen error:", error);
+      delete pendingOcrRequests[requestId];
+      sendResponse({ success: false, error: error.message });
+    });
 
-    return true; // Keep the message channel open for async response
+    return true; // Keep message channel open
+  }
+
+  // Add new handler for OCR results
+  if (message.type === "OCR_RESULT") {
+    console.log("[BACKGROUND] Received OCR result");
+    const { requestId, result, error } = message;
+
+    if (pendingOcrRequests[requestId]) {
+      pendingOcrRequests[requestId]({
+        success: !error,
+        text: result,
+        error,
+      });
+      delete pendingOcrRequests[requestId];
+    }
+    console.log("[BACKGROUND] Processed OCR result:", {
+      requestId,
+      result,
+      error,
+    });
+
+    return true;
   }
 
   if (message.type === "SAVE_IMAGE") {

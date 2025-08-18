@@ -23,5 +23,9 @@
     "skipLibCheck": true,
     "noUncheckedSideEffectImports": true
   },
-  "include": ["src", "public/tesseract-core.wasm.js"]
+  "include": [
+    "src",
+    "public/tesseract-core.wasm.js",
+    "src/offscreen/tesseract/worker.min.js"
+  ]
 }

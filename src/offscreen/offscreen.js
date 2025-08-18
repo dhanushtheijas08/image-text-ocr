@@ -1,8 +1,8 @@
-// Tesseract will be loaded via script tag in offscreen.html
-
 let worker = null;
 let isInitialized = false;
-
+// Add at top
+const WORKER_KEEPALIVE = 300000; // 5 minutes
+let workerTimeout;
 async function createWorker() {
   console.log("Creating Tesseract worker");
   try {
@@ -29,6 +29,8 @@ async function createWorker() {
 
     isInitialized = true;
     console.log("Tesseract worker created successfully");
+    // Reset keepalive timer
+    resetWorkerTimeout();
     return worker;
   } catch (error) {
     console.error("Error creating Tesseract worker:", error);
@@ -38,16 +40,32 @@ async function createWorker() {
   }
 }
 
-async function processImage(imageUrl) {
+function resetWorkerTimeout() {
+  clearTimeout(workerTimeout);
+  workerTimeout = setTimeout(() => {
+    if (worker) {
+      worker.terminate();
+      worker = null;
+      isInitialized = false;
+      console.log("Worker terminated due to inactivity");
+    }
+  }, WORKER_KEEPALIVE);
+}
+
+async function processImage(imageUrl, requestId) {
   try {
     const tesseractWorker = await createWorker();
 
     console.log("Processing image:", imageUrl);
-    const result = await tesseractWorker.recognize(
-      "https://tesseract.projectnaptha.com/img/eng_bw.png"
-    );
+    const result = await tesseractWorker.recognize(imageUrl);
+    // Send result directly to background
+    chrome.runtime.sendMessage({
+      type: "OCR_RESULT",
+      requestId: requestId,
+      result: result.data.text,
+    });
     console.log("OCR Result:", result.data.text);
-
+    resetWorkerTimeout();
     return result.data.text;
   } catch (error) {
     console.error("OCR Error:", error);
@@ -71,39 +89,44 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   console.log("Message sender:", sender);
 
   // Handle OCR_IMAGE messages
-  if (message.type === "PARSE_HTML") {
+  if (message.type === "TRIGGER_OCR") {
     console.log("Processing OCR_IMAGE message");
 
     // Check if we have image data
-    // if (!message.imageData) {
-    //   console.error("No image data provided");
-    //   const errorResponse = { error: "No image data provided" };
-    //   console.log("Sending error response:", errorResponse);
-    //   sendResponse(errorResponse);
-    //   return false;
-    // }
+    if (!message.imageData) {
+      console.error("No image data provided");
+      const errorResponse = { error: "No image data provided" };
+      console.log("Sending error response:", errorResponse);
+      sendResponse(errorResponse);
+      return false;
+    }
 
     console.log("Starting async OCR processing");
 
     // Handle async processing
+    console.log({ message });
+
     (async () => {
       try {
         console.log("Processing OCR request");
-        const result = await processImage(
-          "https://tesseract.projectnaptha.com/img/eng_bw.png"
-        );
+        const result = await processImage(message.imageData, message.requestId);
         console.log("OCR completed, result:", result);
 
-        const successResponse = { result: result };
-        console.log("Sending success response:", successResponse);
-        sendResponse(successResponse);
+        // const successResponse = { result: result };
+        // console.log("Sending success response:", successResponse);
+        // sendResponse(successResponse);
       } catch (error) {
         console.error("Offscreen processing error:", error);
         const errorMessage =
           error instanceof Error ? error.message : "Unknown error";
         const errorResponse = { error: errorMessage };
-        console.log("Sending error response:", errorResponse);
-        sendResponse(errorResponse);
+        // console.log("Sending error response:", errorResponse);
+        // sendResponse(errorResponse);
+        chrome.runtime.sendMessage({
+          type: "OCR_RESULT",
+          requestId,
+          error: error.message,
+        });
       }
     })();
 
