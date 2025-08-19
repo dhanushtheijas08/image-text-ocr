@@ -41,6 +41,7 @@ export default defineManifest({
         "src/offscreen/tesseract/tesseract-core.wasm.js",
         "src/offscreen/tesseract/tesseract.min.js",
         "src/offscreen/tesseract/eng.traineddata.gz",
+        "src/offscreen/tesseract/*",
       ],
       matches: ["<all_urls>"],
     },

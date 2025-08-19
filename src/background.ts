@@ -1,20 +1,136 @@
+// const OFFSCREEN_DOCUMENT_PATH = "src/offscreen/offscreen.html";
+// const pendingOcrRequests: Record<string, Function> = {};
+
+// // Offscreen document management
+// async function ensureOffscreenDocument() {
+//   try {
+//     const hasDocument = await chrome.offscreen.hasDocument();
+//     if (hasDocument) {
+//       return;
+//     }
+
+//     await chrome.offscreen.createDocument({
+//       url: chrome.runtime.getURL(OFFSCREEN_DOCUMENT_PATH),
+//       reasons: [chrome.offscreen.Reason.DOM_PARSER],
+//       justification: "Required for HTML parsing and OCR processing",
+//     });
+
+//     await new Promise((resolve) => setTimeout(resolve, 100));
+//   } catch (error) {
+//     throw error;
+//   }
+// }
+
+// // Initialize offscreen document on startup
+// ensureOffscreenDocument();
+
+// chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
+//   if (message.type === "TAKE_SCREENSHOT") {
+//     if (!sender.tab?.id) return false;
+
+//     chrome.windows.getCurrent({ populate: false }, async (window) => {
+//       if (!window?.id) return;
+
+//       const dataUrl = await chrome.tabs.captureVisibleTab(window.id, {
+//         format: "png",
+//         quality: 100,
+//       });
+
+//       chrome.tabs.sendMessage(sender.tab!.id!, {
+//         type: "SCREEN_CAPTURE_RESULT",
+//         dataUrl,
+//         rect: message.rect,
+//       });
+//     });
+
+//     return true;
+//   }
+
+//   if (message.type === "TRIGGER_OCR") {
+//     console.log("[BACKGROUND] Processing OCR trigger");
+//     const requestId =
+//       Date.now().toString() + Math.random().toString(36).substr(2, 5);
+
+//     pendingOcrRequests[requestId] = sendResponse;
+
+//     try {
+//       await ensureOffscreenDocument();
+
+//       chrome.runtime.sendMessage(
+//         {
+//           target: "offscreen",
+//           type: "PROCESS_OCR",
+//           imageData: message.imageData,
+//           requestId,
+//         },
+//         (ack) => {
+//           if (chrome.runtime.lastError) {
+//             console.error("Offscreen comm error:", chrome.runtime.lastError);
+//             sendResponse({
+//               success: false,
+//               error:
+//                 "Failed to send to offscreen: " +
+//                 chrome.runtime.lastError.message,
+//             });
+//             delete pendingOcrRequests[requestId];
+//           }
+//         }
+//       );
+//     } catch (error) {
+//       console.error("Error ensuring offscreen:", error);
+//       sendResponse({
+//         success: false,
+//         error:
+//           "Offscreen error: " +
+//           (error instanceof Error ? error.message : "Unknown error"),
+//       });
+//       delete pendingOcrRequests[requestId];
+//     }
+
+//     return true;
+//   }
+
+//   if (message.type === "OCR_RESULT") {
+//     const { requestId, text, error } = message;
+//     if (pendingOcrRequests[requestId]) {
+//       pendingOcrRequests[requestId]({
+//         success: !error,
+//         text: text || "",
+//         error: error || null,
+//       });
+//       delete pendingOcrRequests[requestId];
+//     }
+//     console.log("send to app");
+
+//     console.log("Sending OCR result to app:", { requestId, text, error });
+
+//     try {
+//       chrome.runtime.sendMessage({
+//         type: "COPY_OCR_RESULT",
+//         text,
+//         error,
+//       });
+//     } catch (error) {
+//       console.error("Failed to send OCR result to app:", error);
+//     }
+//     return true;
+//   }
+// });
+
+// // Clean up offscreen document when not needed
+// chrome.runtime.onSuspend.addListener(() => {
+//   chrome.offscreen.closeDocument();
+// });
+
 const OFFSCREEN_DOCUMENT_PATH = "src/offscreen/offscreen.html";
-const pendingOcrRequests: Record<string, Function> = {};
+const pendingOcrRequests = new Map();
 
-console.log("from background");
-
-// Offscreen document management
 async function ensureOffscreenDocument() {
   try {
     const hasDocument = await chrome.offscreen.hasDocument();
     if (hasDocument) {
-      console.log("Offscreen document already exists");
       return;
     }
-
-    console.log("Creating offscreen document");
-    console.log(OFFSCREEN_DOCUMENT_PATH);
-    console.log(chrome.runtime.getURL(OFFSCREEN_DOCUMENT_PATH));
 
     await chrome.offscreen.createDocument({
       url: chrome.runtime.getURL(OFFSCREEN_DOCUMENT_PATH),
@@ -22,228 +138,166 @@ async function ensureOffscreenDocument() {
       justification: "Required for HTML parsing and OCR processing",
     });
 
-    console.log("Offscreen document created successfully");
-
-    // Give the offscreen document a moment to initialize
-    await new Promise((resolve) => setTimeout(resolve, 100));
+    // Wait a bit longer for offscreen to initialize
+    await new Promise((resolve) => setTimeout(resolve, 200));
   } catch (error) {
-    console.error("Failed to create offscreen document:", error);
+    console.error("Error creating offscreen document:", error);
     throw error;
   }
 }
 
-// Initialize offscreen document on startup
-ensureOffscreenDocument();
-
-async function sendToOffscreen<T>(message: any): Promise<T> {
-  try {
-    await ensureOffscreenDocument();
-
-    console.log("Sending to offscreen:", message);
-
-    return new Promise((resolve, reject) => {
-      // Add a timeout to catch hanging requests
-      const timeout = setTimeout(() => {
-        reject(new Error("Offscreen request timeout after 30 seconds"));
-      }, 30000);
-
-      chrome.runtime.sendMessage(
-        {
-          target: "offscreen",
-          ...message,
-        },
-        (response) => {
-          clearTimeout(timeout);
-          console.log("Received response from offscreen:", response);
-
-          if (chrome.runtime.lastError) {
-            console.error("Error from offscreen", chrome.runtime.lastError);
-            reject(chrome.runtime.lastError);
-          } else if (!response) {
-            console.error("No response received from offscreen");
-            reject(new Error("No response received from offscreen"));
-          } else {
-            console.log("Resolved response from offscreen");
-            resolve(response);
-          }
-        }
-      );
-    });
-  } catch (error) {
-    console.error("Error in sendToOffscreen:", error);
-    throw error;
-  }
-}
+ensureOffscreenDocument().catch(console.error);
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  console.log("[BACKGROUND] Received message:", message.type);
+
   if (message.type === "TAKE_SCREENSHOT") {
-    if (!sender.tab?.id) return;
+    if (!sender.tab?.id) {
+      sendResponse({ success: false, error: "No tab ID" });
+      return false;
+    }
 
-    chrome.tabs.sendMessage(
-      sender.tab.id,
-      { type: "GET_VIEWPORT_SIZE" },
-      async (viewport) => {
-        console.log("Background: received viewport:", viewport);
-
-        if (!viewport) {
-          console.error("Viewport not received");
-          return;
+    (async () => {
+      try {
+        const window = await chrome.windows.getCurrent({ populate: false });
+        if (!window?.id) {
+          throw new Error("No window ID");
         }
 
-        chrome.windows.getCurrent({ populate: false }, async (window) => {
-          if (!window?.id) return;
+        const dataUrl = await chrome.tabs.captureVisibleTab(window.id, {
+          format: "png",
+          quality: 100,
+        });
 
-          // Capture with high quality for better results
-          const dataUrl = await chrome.tabs.captureVisibleTab(window.id, {
-            format: "png",
-            quality: 100, // Add quality parameter
-          });
+        await chrome.tabs.sendMessage(sender.tab?.id || 1, {
+          type: "SCREEN_CAPTURE_RESULT",
+          dataUrl,
+          rect: message.rect,
+        });
 
-          chrome.tabs.sendMessage(sender.tab!.id!, {
-            type: "SCREEN_CAPTURE_RESULT",
-            dataUrl,
-            rect: message.rect,
-            viewport,
-          });
+        sendResponse({ success: true });
+      } catch (error) {
+        console.error("[BACKGROUND] Screenshot error:", error);
+        sendResponse({
+          success: false,
+          error: error || "Screenshot failed",
         });
       }
-    );
+    })();
 
-    return true;
+    return true; // Keep message channel open for async response
   }
-
-  // Handle TRIGGER_OCR message from content script
-  // if (message.type === "TRIGGER_OCR") {
-  //   console.log("[BACKGROUND] Processing OCR trigger");
-
-  //   sendToOffscreen<{ result: string }>({
-  //     type: "OCR_IMAGE",
-  //     imageData: message.imageData,
-  //   })
-  //     .then((response) => {
-  //       console.log("OCR result:", response);
-  //       sendResponse({ success: true, text: response.result });
-  //     })
-  //     .catch((error) => {
-  //       console.error("Offscreen error:", error);
-  //       sendResponse({ success: false, error: error.message });
-  //     });
-
-  //   return true; // Keep the message channel open for async response
-  // }
 
   if (message.type === "TRIGGER_OCR") {
     console.log("[BACKGROUND] Processing OCR trigger");
     const requestId =
       Date.now().toString() + Math.random().toString(36).substr(2, 5);
 
-    // Store response callback
-    pendingOcrRequests[requestId] = sendResponse;
+    // Store the response function
+    pendingOcrRequests.set(requestId, sendResponse);
 
-    // Forward to offscreen with request ID
-    sendToOffscreen({
-      type: "OCR_IMAGE",
-      imageData: message.imageData,
-      requestId,
-    }).catch((error) => {
-      console.error("Offscreen error:", error);
-      delete pendingOcrRequests[requestId];
-      sendResponse({ success: false, error: error.message });
-    });
+    (async () => {
+      try {
+        await ensureOffscreenDocument();
 
-    return true; // Keep message channel open
+        // Send message to offscreen with error handling
+        chrome.runtime
+          .sendMessage({
+            target: "offscreen",
+            type: "PROCESS_OCR",
+            imageData: message.imageData,
+            requestId,
+          })
+          .catch((error) => {
+            console.error("[BACKGROUND] Error sending to offscreen:", error);
+            const storedResponse = pendingOcrRequests.get(requestId);
+            if (storedResponse) {
+              storedResponse({
+                success: false,
+                error: "Failed to send to offscreen: " + error.message,
+              });
+              pendingOcrRequests.delete(requestId);
+            }
+          });
+      } catch (error) {
+        console.error("[BACKGROUND] Error ensuring offscreen:", error);
+        const storedResponse = pendingOcrRequests.get(requestId);
+        if (storedResponse) {
+          storedResponse({
+            success: false,
+            error: "Offscreen error: " + error,
+          });
+          pendingOcrRequests.delete(requestId);
+        }
+      }
+    })();
+
+    return true; // Keep message channel open for async response
   }
 
-  // Add new handler for OCR results
   if (message.type === "OCR_RESULT") {
     console.log("[BACKGROUND] Received OCR result");
-    const { requestId, result, error } = message;
+    const { requestId, text, error } = message;
 
-    if (pendingOcrRequests[requestId]) {
-      pendingOcrRequests[requestId]({
+    console.log({ text });
+
+    // Send response to the original caller
+    const storedResponse = pendingOcrRequests.get(requestId);
+    if (storedResponse) {
+      storedResponse({
         success: !error,
-        text: result,
-        error,
+        text: text || "",
+        error: error || null,
       });
-      delete pendingOcrRequests[requestId];
+      pendingOcrRequests.delete(requestId);
     }
-    console.log("[BACKGROUND] Processed OCR result:", {
-      requestId,
-      result,
-      error,
-    });
 
-    return true;
-  }
+    // Send OCR result to all content scripts in all tabs
+    (async () => {
+      try {
+        const tabs = await chrome.tabs.query({});
+        const promises = tabs.map(async (tab) => {
+          if (tab.id) {
+            try {
+              await chrome.tabs.sendMessage(tab.id, {
+                type: "COPY_OCR_RESULT",
+                text,
+                error,
+              });
+            } catch (tabError) {
+              console.debug(
+                `[BACKGROUND] Could not send to tab ${tab.id}:`,
+                tabError
+              );
+            }
+          }
+        });
 
-  if (message.type === "SAVE_IMAGE") {
-    console.log("[BACKGROUND] Saving image from data URL");
+        await Promise.allSettled(promises);
+        console.log("[BACKGROUND] OCR result broadcast to all tabs");
+      } catch (error) {
+        console.error("[BACKGROUND] Failed to broadcast OCR result:", error);
+      }
+    })();
 
-    // chrome.downloads.download({
-    //   url: message.dataUrl,
-    //   filename: `screenshot_${Date.now()}.png`, // Add timestamp
-    //   saveAs: false,
-    // });
-
-    sendToOffscreen<{ result: string }>({
-      type: "OCR_IMAGE",
-      imageData: message.dataUrl,
-    })
-      .then((response) => {
-        console.log("OCR result:", response);
-        sendResponse({ success: true, result: response.result });
-      })
-      .catch((error) => {
-        console.error("Offscreen error:", error);
-        sendResponse({ success: false, error: error.message });
-      });
-
-    return true; // Keep the message channel open for async response
-  }
-
-  if (message.type === "OCR_IMAGE") {
-    console.log("[BACKGROUND] Processing OCR request");
-
-    sendToOffscreen<{ result: string }>({
-      type: "OCR_IMAGE",
-      imageData: message.imageData,
-    })
-      .then((response) => {
-        console.log("OCR result:", response);
-        sendResponse({ success: true, result: response.result });
-      })
-      .catch((error) => {
-        console.error("Offscreen error:", error);
-        sendResponse({ success: false, error: error.message });
-      });
-
-    return true; // Keep the message channel open for async response
-  }
-
-  // Handle PARSE_HTML message from content script
-  if (message.type === "PARSE_HTML") {
-    console.log("[BACKGROUND] Processing HTML parsing request");
-
-    sendToOffscreen<{ result: string }>({
-      type: "PARSE_HTML",
-      html: message.html,
-    })
-      .then((response) => {
-        console.log("HTML parsing result:", response);
-        sendResponse({ success: true, result: response.result });
-      })
-      .catch((error) => {
-        console.error("Offscreen error:", error);
-        sendResponse({ success: false, error: error.message });
-      });
-
-    return true; // Keep the message channel open for async response
+    return false;
   }
 
   return false;
 });
 
-// Clean up offscreen document when not needed
-chrome.runtime.onSuspend.addListener(() => {
-  chrome.offscreen.closeDocument();
+chrome.runtime.onSuspend.addListener(async () => {
+  try {
+    await chrome.offscreen.closeDocument();
+  } catch (error) {
+    console.error("Error closing offscreen document:", error);
+  }
+});
+
+chrome.runtime.onStartup.addListener(() => {
+  pendingOcrRequests.clear();
+});
+
+chrome.runtime.onInstalled.addListener(() => {
+  pendingOcrRequests.clear();
 });
