@@ -1,6 +1,7 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import App from "./views/App.tsx";
+import { ToastProvider } from "@/components/ui/toast.tsx";
 
 console.log("[CRXJS] Hello world from content script!");
 
@@ -9,6 +10,8 @@ container.id = "crxjs-app";
 document.body.appendChild(container);
 createRoot(container).render(
   <StrictMode>
-    <App />
+    <ToastProvider>
+      <App />
+    </ToastProvider>
   </StrictMode>
 );
