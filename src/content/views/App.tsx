@@ -74,6 +74,7 @@ function App() {
         {
           type: "TAKE_SCREENSHOT",
           rect,
+          fullScreen: false,
         },
         (res) => {
           if (res?.success) {
@@ -160,6 +161,8 @@ function App() {
     const listener = (message: any) => {
       if (message.type === "TAKE_SCREEN_SHORT") {
         setToggle(true);
+      } else if (message.type === "FULL_SCREEN_CAPTURE") {
+        handleCapture();
       } else if (message.type === "SCREEN_CAPTURE_RESULT") {
         const { dataUrl } = message;
         if (!dataUrl) {

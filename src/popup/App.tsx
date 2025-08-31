@@ -6,17 +6,32 @@ import {
   Monitor,
   Upload,
 } from "lucide-react";
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import "./App.css";
 
 const App = () => {
-  const [dragActive, setDragActive] = useState(false);
   const [processing, setProcessing] = useState(false);
   const [extractedText, setExtractedText] = useState("");
   const [hasClipboardImage, setHasClipboardImage] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dropZoneRef = useRef<HTMLDivElement>(null);
 
+  const handleFullScreen = () => {
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      if (tabs[0].id) {
+        chrome.tabs.sendMessage(
+          tabs[0].id,
+          {
+            type: "FULL_SCREEN_CAPTURE",
+            payload: { message: "Full screen capture" },
+          },
+          (response) => {
+            console.log("Response from content script:", response);
+          }
+        );
+      }
+    });
+  };
   // Check for clipboard image on mount
   useEffect(() => {
     const checkClipboard = async () => {
@@ -38,43 +53,6 @@ const App = () => {
     return () => clearInterval(interval);
   }, []);
 
-  // Keyboard shortcuts
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.ctrlKey && e.key === "[") {
-        e.preventDefault();
-        handleFullScreen();
-      } else if (e.ctrlKey && e.key === "]") {
-        e.preventDefault();
-        handleCropArea();
-      }
-    };
-
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, []);
-
-  const handleDrag = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (e.type === "dragenter" || e.type === "dragover") {
-      setDragActive(true);
-    } else if (e.type === "dragleave") {
-      setDragActive(false);
-    }
-  }, []);
-
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setDragActive(false);
-
-    const files = e.dataTransfer.files;
-    if (files && files[0]) {
-      handleFileUpload(files[0]);
-    }
-  }, []);
-
   const handleFileUpload = (file: File) => {
     if (!file.type.startsWith("image/")) return;
 
@@ -86,17 +64,6 @@ const App = () => {
       );
       setProcessing(false);
     }, 2000);
-  };
-
-  const handleFullScreen = () => {
-    setProcessing(true);
-    // Simulate full screen capture
-    setTimeout(() => {
-      setExtractedText(
-        "Extracted text from full screen:\n\nSample text from screen capture..."
-      );
-      setProcessing(false);
-    }, 1500);
   };
 
   const handleCropArea = () => {
@@ -196,11 +163,7 @@ const App = () => {
 
           <div
             ref={dropZoneRef}
-            className={`drop-zone ${dragActive ? "active" : ""}`}
-            onDragEnter={handleDrag}
-            onDragLeave={handleDrag}
-            onDragOver={handleDrag}
-            onDrop={handleDrop}
+            className="drop-zone"
             onClick={() => fileInputRef.current?.click()}
           >
             <FileImage size={28} className="upload-icon" color="#70af59" />

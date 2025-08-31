@@ -148,141 +148,137 @@ async function ensureOffscreenDocument() {
 
 ensureOffscreenDocument().catch(console.error);
 
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  console.log("[BACKGROUND] Received message:", message.type);
-
-  if (message.type === "TAKE_SCREENSHOT") {
-    if (!sender.tab?.id) {
-      sendResponse({ success: false, error: "No tab ID" });
-      return false;
+const captureFullScreen = async (sender: any, sendResponse: any) => {
+  try {
+    const window = await chrome.windows.getCurrent({ populate: false });
+    if (!window?.id) {
+      throw new Error("No window ID");
     }
 
-    (async () => {
-      try {
-        const window = await chrome.windows.getCurrent({ populate: false });
-        if (!window?.id) {
-          throw new Error("No window ID");
-        }
+    const dataUrl = await chrome.tabs.captureVisibleTab(window.id, {
+      format: "png",
+      quality: 100,
+    });
 
-        const dataUrl = await chrome.tabs.captureVisibleTab(window.id, {
-          format: "png",
-          quality: 100,
-        });
+    await chrome.tabs.sendMessage(sender.tab?.id || 1, {
+      type: "SCREEN_CAPTURE_RESULT",
+      dataUrl,
+    });
 
-        await chrome.tabs.sendMessage(sender.tab?.id || 1, {
-          type: "SCREEN_CAPTURE_RESULT",
-          dataUrl,
-          rect: message.rect,
-        });
-
-        sendResponse({ success: true });
-      } catch (error) {
-        console.error("[BACKGROUND] Screenshot error:", error);
-        sendResponse({
-          success: false,
-          error: error || "Screenshot failed",
-        });
-      }
-    })();
-
-    return true; // Keep message channel open for async response
+    sendResponse({ success: true });
+  } catch (error) {
+    console.error("[BACKGROUND] Screenshot error:", error);
+    sendResponse({
+      success: false,
+      error: error || "Screenshot failed",
+    });
   }
+};
 
-  if (message.type === "TRIGGER_OCR") {
-    console.log("[BACKGROUND] Processing OCR trigger");
-    const requestId =
-      Date.now().toString() + Math.random().toString(36).substr(2, 5);
+const handleOcrTrigger = async (
+  message: any,
 
-    // Store the response function
-    pendingOcrRequests.set(requestId, sendResponse);
+  requestId: string
+) => {
+  try {
+    await ensureOffscreenDocument();
 
-    (async () => {
-      try {
-        await ensureOffscreenDocument();
-
-        // Send message to offscreen with error handling
-        chrome.runtime
-          .sendMessage({
-            target: "offscreen",
-            type: "PROCESS_OCR",
-            imageData: message.imageData,
-            requestId,
-          })
-          .catch((error) => {
-            console.error("[BACKGROUND] Error sending to offscreen:", error);
-            const storedResponse = pendingOcrRequests.get(requestId);
-            if (storedResponse) {
-              storedResponse({
-                success: false,
-                error: "Failed to send to offscreen: " + error.message,
-              });
-              pendingOcrRequests.delete(requestId);
-            }
-          });
-      } catch (error) {
-        console.error("[BACKGROUND] Error ensuring offscreen:", error);
+    // Send message to offscreen with error handling
+    chrome.runtime
+      .sendMessage({
+        target: "offscreen",
+        type: "PROCESS_OCR",
+        imageData: message.imageData,
+        requestId,
+      })
+      .catch((error) => {
+        console.error("[BACKGROUND] Error sending to offscreen:", error);
         const storedResponse = pendingOcrRequests.get(requestId);
         if (storedResponse) {
           storedResponse({
             success: false,
-            error: "Offscreen error: " + error,
+            error: "Failed to send to offscreen: " + error.message,
           });
           pendingOcrRequests.delete(requestId);
         }
-      }
-    })();
-
-    return true; // Keep message channel open for async response
-  }
-
-  if (message.type === "OCR_RESULT") {
-    console.log("[BACKGROUND] Received OCR result");
-    const { requestId, text, error } = message;
-
-    console.log({ text });
-
-    // Send response to the original caller
+      });
+  } catch (error) {
+    console.error("[BACKGROUND] Error ensuring offscreen:", error);
     const storedResponse = pendingOcrRequests.get(requestId);
     if (storedResponse) {
       storedResponse({
-        success: !error,
-        text: text || "",
-        error: error || null,
+        success: false,
+        error: "Offscreen error: " + error,
       });
       pendingOcrRequests.delete(requestId);
     }
-
-    // Send OCR result to all content scripts in all tabs
-    (async () => {
-      try {
-        const tabs = await chrome.tabs.query({});
-        const promises = tabs.map(async (tab) => {
-          if (tab.id) {
-            try {
-              await chrome.tabs.sendMessage(tab.id, {
-                type: "COPY_OCR_RESULT",
-                text,
-                error,
-              });
-            } catch (tabError) {
-              console.debug(
-                `[BACKGROUND] Could not send to tab ${tab.id}:`,
-                tabError
-              );
-            }
-          }
-        });
-
-        await Promise.allSettled(promises);
-        console.log("[BACKGROUND] OCR result broadcast to all tabs");
-      } catch (error) {
-        console.error("[BACKGROUND] Failed to broadcast OCR result:", error);
-      }
-    })();
-
-    return false;
   }
+};
 
+const handleOcrResult = async (message: any) => {
+  try {
+    const tabs = await chrome.tabs.query({});
+    const promises = tabs.map(async (tab) => {
+      if (tab.id) {
+        try {
+          await chrome.tabs.sendMessage(tab.id, {
+            type: "COPY_OCR_RESULT",
+            text: message.text,
+            error: message.error,
+          });
+        } catch (tabError) {
+          console.debug(
+            `[BACKGROUND] Could not send to tab ${tab.id}:`,
+            tabError
+          );
+        }
+      }
+    });
+
+    await Promise.allSettled(promises);
+    console.log("[BACKGROUND] OCR result broadcast to all tabs");
+  } catch (error) {
+    console.error("[BACKGROUND] Failed to broadcast OCR result:", error);
+  }
+};
+
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  switch (message.type) {
+    case "TAKE_SCREENSHOT":
+      if (!sender.tab?.id) {
+        sendResponse({ success: false, error: "No tab ID" });
+        return false;
+      }
+      captureFullScreen(sender, sendResponse);
+
+      return true;
+    case "TRIGGER_OCR":
+      console.log("[BACKGROUND] Processing OCR trigger");
+      const requestIdT =
+        Date.now().toString() + Math.random().toString(36).substr(2, 5);
+      pendingOcrRequests.set(requestIdT, sendResponse);
+
+      handleOcrTrigger(message, requestIdT);
+      return true;
+
+    case "OCR_RESULT":
+      console.log("[BACKGROUND] Received OCR result");
+      const { requestId, text, error } = message;
+
+      const storedResponse = pendingOcrRequests.get(requestId);
+      if (storedResponse) {
+        storedResponse({
+          success: !error,
+          text: text || "",
+          error: error || null,
+        });
+        pendingOcrRequests.delete(requestId);
+      }
+
+      handleOcrResult(message);
+
+      return false;
+  }
   return false;
 });
 
