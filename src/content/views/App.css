@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap");
+/* @import url("https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap");
 
 :root {
   --background: #fcfcfc;
@@ -94,38 +94,12 @@
   --shadow-lg: 0px 1px 2px 0px hsl(0 0% 0% / 0.18), 0px 4px 6px -1px hsl(0 0% 0% / 0.18);
   --shadow-xl: 0px 1px 2px 0px hsl(0 0% 0% / 0.18), 0px 8px 10px -1px hsl(0 0% 0% / 0.18);
   --shadow-2xl: 0px 1px 2px 0px hsl(0 0% 0% / 0.45);
-}
+} */
 
-/* 
-.overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100vh;
-  background: rgba(0, 0, 0, 0.3);
-  z-index: 10000;
-  cursor: crosshair;
-}
 
-.selection-box {
-  position: absolute;
-  border: 2px solid #007acc;
-  background: rgba(0, 122, 204, 0.1);
-  pointer-events: none;
-}
-
-.capture-btn {
-  position: fixed;
-  top: 20px;
-  right: 20px;
-  z-index: 10001;
-  padding: 10px 20px;
-  background: #007acc;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
+/* :root {
+  --font-sans: "Inter", sans-serif;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.1);
 } */
 
 .overlay {
@@ -135,15 +109,14 @@
   width: 100vw;
   height: 100vh;
   background: rgba(0, 0, 0, 0.3);
-  /* keep dim effect */
   z-index: 10000;
   cursor: crosshair;
 }
 
 .selection-box {
   position: absolute;
-  border: 2px solid var(--primary);
-  background: color-mix(in srgb, var(--primary) 20%, transparent);
+  border: 2px solid #70af59;
+  background: color-mix(in srgb, #70af59 15%, transparent);
   pointer-events: none;
   border-radius: 0px;
 }
@@ -154,24 +127,25 @@
   right: 20px;
   z-index: 10001;
   padding: 10px 20px;
-  background: var(--primary);
-  color: var(--primary-foreground);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
+  background: #70af59;
+  color: #ffffff;
+  border-radius: 8px;
   cursor: pointer;
   font-family: var(--font-sans);
-  box-shadow: var(--shadow-sm);
+  box-shadow: 0px 1px 2px 0px hsl(0 0% 0% / 0.18),
+    0px 1px 2px -1px hsl(0 0% 0% / 0.18);
   transition: background 0.2s ease, transform 0.1s ease;
 }
 
 .capture-btn:hover {
-  background: var(--secondary);
-  color: var(--secondary-foreground);
+  background: #70af59;
+  color: #ffffff;
 }
 
 .capture-btn:active {
   transform: scale(0.96);
 }
+
 
 .toast-container {
   position: fixed;
@@ -183,6 +157,7 @@
   z-index: 9999;
 }
 
+/* 
 .toast {
   background: #1a1a2e;
   color: #e2e2f5;
@@ -201,4 +176,51 @@
 
 .toast-error {
   background: #ff5470;
+} */
+.toast {
+  background: #ffffff;
+  color: #000000;
+  padding: 12px 18px;
+  border-radius: 8px;
+  font-size: 15px;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  animation: slideIn 0.3s ease, fadeOut 0.3s ease 4s forwards;
+}
+
+/* Success → brand green */
+.toast-success {
+  background: #70af59;
+  color: #ffffff;
+  border: 1px solid #70af59;
+}
+
+/* Error → strong pink/red */
+.toast-error {
+  background: #ff5470;
+  color: #ffffff;
+  border: 1px solid #ff5470;
+}
+
+/* Optional animations */
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes fadeOut {
+  to {
+    opacity: 0;
+    transform: translateX(100%);
+  }
 }
