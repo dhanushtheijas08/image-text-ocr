@@ -26,8 +26,8 @@ export default defineManifest({
     "activeTab",
     "scripting",
     "tabCapture",
-    "downloads",
     "offscreen",
+    "clipboardRead",
   ],
 
   background: {

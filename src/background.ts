@@ -203,6 +203,8 @@ const handleOcrTrigger = async (message: any, sendResponse: any) => {
   try {
     await ensureOffscreenDocument();
 
+    console.log({ message, from: "handleOcrTrigger" });
+
     // Send message to offscreen with error handling
     chrome.runtime
       .sendMessage({
@@ -238,6 +240,8 @@ const handleOcrTrigger = async (message: any, sendResponse: any) => {
 const handleOcrResult = async (message: any) => {
   console.log("[BACKGROUND] Received OCR result");
   const { requestId, text, error } = message;
+
+  console.log({ message, from: "handleOcrResult" });
 
   const storedResponse = pendingOcrRequests.get(requestId);
   if (storedResponse) {
@@ -286,6 +290,17 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     case "TRIGGER_OCR":
       handleOcrTrigger(message, sendResponse);
       return true;
+
+    case "FILE_UPLOAD_CAPTURE": {
+      // accept either message.imageData or message.dataUrl, be forgiving
+      const imageData = message.imageData || message.dataUrl;
+      if (!imageData) {
+        sendResponse({ success: false, error: "No image data provided" });
+        return false;
+      }
+      handleOcrTrigger({ imageData }, sendResponse);
+      return true;
+    }
 
     case "OCR_RESULT":
       handleOcrResult(message);

@@ -31,8 +31,32 @@ const App = () => {
     });
   };
 
-  const handleFileUpload = (file: File) => {
+  const handleFileUpload = async (file: File) => {
     if (!file.type.startsWith("image/")) return;
+
+    // Read as Data URL (base64) so it can be used outside the popup context
+    const toDataURL = (f: File) =>
+      new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(f);
+      });
+
+    try {
+      const dataUrl = await toDataURL(file);
+
+      const ocrResponse = await chrome.runtime.sendMessage({
+        type: "FILE_UPLOAD_CAPTURE",
+        imageData: dataUrl,
+      });
+
+      if (!ocrResponse?.success) {
+        console.error("OCR processing failed:", ocrResponse?.error);
+      }
+    } catch (err) {
+      console.error("Error preparing/sending uploaded file for OCR:", err);
+    }
   };
 
   const handleClipboardPaste = async () => {
@@ -41,10 +65,14 @@ const App = () => {
       for (const clipboardItem of clipboardItems) {
         for (const type of clipboardItem.types) {
           if (type.startsWith("image/")) {
+            const blob = await clipboardItem.getType(type);
+            const file = new File([blob], "pasted-image", { type });
+            handleFileUpload(file);
             return;
           }
         }
       }
+      console.log("No image found in clipboard");
     } catch (err) {
       console.error("Failed to read clipboard:", err);
     }

@@ -141,19 +141,23 @@ function App() {
 
       const croppedDataUrl = canvas.toDataURL("image/png");
 
-      try {
-        const ocrResponse = await chrome.runtime.sendMessage({
-          type: "TRIGGER_OCR",
-          imageData: croppedDataUrl,
-        });
-        if (!ocrResponse?.success) {
-          console.error("OCR processing failed:", ocrResponse?.error);
-        }
-      } catch (ocrError) {
-        console.error("Error sending OCR request:", ocrError);
-      }
+      uploadImage(croppedDataUrl);
     } catch (error) {
       console.error("Error processing image:", error);
+    }
+  };
+
+  const uploadImage = async (dataUrl: string) => {
+    try {
+      const ocrResponse = await chrome.runtime.sendMessage({
+        type: "TRIGGER_OCR",
+        imageData: dataUrl,
+      });
+      if (!ocrResponse?.success) {
+        console.error("OCR processing failed:", ocrResponse?.error);
+      }
+    } catch (ocrError) {
+      console.error("Error sending OCR request:", ocrError);
     }
   };
 
@@ -163,7 +167,16 @@ function App() {
         setToggle(true);
       } else if (message.type === "FULL_SCREEN_CAPTURE") {
         handleCapture(true);
-      } else if (message.type === "SCREEN_CAPTURE_RESULT") {
+      }
+      //  else if (message.type === "FILE_UPLOAD_CAPTURE") {
+      //   const { dataUrl } = message;
+      //   if (!dataUrl) {
+      //     console.error("Invalid data received from background script");
+      //     return;
+      //   }
+      //   uploadImage(dataUrl);
+      // }
+      else if (message.type === "SCREEN_CAPTURE_RESULT") {
         const { dataUrl } = message;
         if (!dataUrl) {
           console.error("Invalid data received from background script");
