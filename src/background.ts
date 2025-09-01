@@ -148,7 +148,15 @@ async function ensureOffscreenDocument() {
 
 ensureOffscreenDocument().catch(console.error);
 
-const captureFullScreen = async (sender: any, sendResponse: any) => {
+const captureFullScreen = async (
+  sender: any,
+  sendResponse: any,
+  message: any
+) => {
+  if (!sender.tab?.id) {
+    sendResponse({ success: false, error: "No tab ID" });
+    return false;
+  }
   try {
     const window = await chrome.windows.getCurrent({ populate: false });
     if (!window?.id) {
@@ -160,10 +168,21 @@ const captureFullScreen = async (sender: any, sendResponse: any) => {
       quality: 100,
     });
 
-    await chrome.tabs.sendMessage(sender.tab?.id || 1, {
-      type: "SCREEN_CAPTURE_RESULT",
-      dataUrl,
-    });
+    if (!message.fullScreen) {
+      await chrome.tabs.sendMessage(sender.tab?.id || 1, {
+        type: "SCREEN_CAPTURE_RESULT",
+        dataUrl,
+      });
+    } else {
+      // console.log({ dataUrl });
+      // // Download the image using chrome.downloads API
+      // await chrome.downloads.download({
+      //   url: dataUrl,
+      //   filename: "screenshot.png",
+      //   saveAs: false,
+      // });
+      handleOcrTrigger({ imageData: dataUrl }, sendResponse);
+    }
 
     sendResponse({ success: true });
   } catch (error) {
@@ -175,11 +194,12 @@ const captureFullScreen = async (sender: any, sendResponse: any) => {
   }
 };
 
-const handleOcrTrigger = async (
-  message: any,
+const handleOcrTrigger = async (message: any, sendResponse: any) => {
+  console.log("[BACKGROUND] Processing OCR trigger");
+  const requestId =
+    Date.now().toString() + Math.random().toString(36).substr(2, 5);
+  pendingOcrRequests.set(requestId, sendResponse);
 
-  requestId: string
-) => {
   try {
     await ensureOffscreenDocument();
 
@@ -216,10 +236,25 @@ const handleOcrTrigger = async (
 };
 
 const handleOcrResult = async (message: any) => {
+  console.log("[BACKGROUND] Received OCR result");
+  const { requestId, text, error } = message;
+
+  const storedResponse = pendingOcrRequests.get(requestId);
+  if (storedResponse) {
+    storedResponse({
+      success: !error,
+      text: text || "",
+      error: error || null,
+    });
+    pendingOcrRequests.delete(requestId);
+  }
+
   try {
     const tabs = await chrome.tabs.query({});
     const promises = tabs.map(async (tab) => {
       if (tab.id) {
+        console.log({ text: message.text });
+
         try {
           await chrome.tabs.sendMessage(tab.id, {
             type: "COPY_OCR_RESULT",
@@ -245,38 +280,15 @@ const handleOcrResult = async (message: any) => {
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   switch (message.type) {
     case "TAKE_SCREENSHOT":
-      if (!sender.tab?.id) {
-        sendResponse({ success: false, error: "No tab ID" });
-        return false;
-      }
-      captureFullScreen(sender, sendResponse);
-
+      captureFullScreen(sender, sendResponse, message);
       return true;
-    case "TRIGGER_OCR":
-      console.log("[BACKGROUND] Processing OCR trigger");
-      const requestIdT =
-        Date.now().toString() + Math.random().toString(36).substr(2, 5);
-      pendingOcrRequests.set(requestIdT, sendResponse);
 
-      handleOcrTrigger(message, requestIdT);
+    case "TRIGGER_OCR":
+      handleOcrTrigger(message, sendResponse);
       return true;
 
     case "OCR_RESULT":
-      console.log("[BACKGROUND] Received OCR result");
-      const { requestId, text, error } = message;
-
-      const storedResponse = pendingOcrRequests.get(requestId);
-      if (storedResponse) {
-        storedResponse({
-          success: !error,
-          text: text || "",
-          error: error || null,
-        });
-        pendingOcrRequests.delete(requestId);
-      }
-
       handleOcrResult(message);
-
       return false;
   }
   return false;

@@ -6,24 +6,22 @@ import {
   Monitor,
   Upload,
 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useRef } from "react";
 import "./App.css";
 
 const App = () => {
-  const [processing, setProcessing] = useState(false);
-  const [extractedText, setExtractedText] = useState("");
-  const [hasClipboardImage, setHasClipboardImage] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dropZoneRef = useRef<HTMLDivElement>(null);
+  const hasClipboardImage = false;
 
-  const handleFullScreen = () => {
+  const handleCapture = (type: "FULL_SCREEN_CAPTURE" | "CROP_AREA_CAPTURE") => {
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
       if (tabs[0].id) {
         chrome.tabs.sendMessage(
           tabs[0].id,
           {
-            type: "FULL_SCREEN_CAPTURE",
-            payload: { message: "Full screen capture" },
+            type: type,
+            payload: { message: type },
           },
           (response) => {
             console.log("Response from content script:", response);
@@ -32,49 +30,9 @@ const App = () => {
       }
     });
   };
-  // Check for clipboard image on mount
-  useEffect(() => {
-    const checkClipboard = async () => {
-      try {
-        const clipboardItems = await navigator.clipboard.read();
-        const hasImage = clipboardItems.some((item) =>
-          item.types.some((type) => type.startsWith("image/"))
-        );
-        setHasClipboardImage(hasImage);
-      } catch (err) {
-        setHasClipboardImage(false);
-      }
-    };
-
-    checkClipboard();
-
-    // Listen for clipboard changes
-    const interval = setInterval(checkClipboard, 1000);
-    return () => clearInterval(interval);
-  }, []);
 
   const handleFileUpload = (file: File) => {
     if (!file.type.startsWith("image/")) return;
-
-    setProcessing(true);
-    // Simulate OCR processing
-    setTimeout(() => {
-      setExtractedText(
-        `Extracted text from ${file.name}:\n\nSample extracted text would appear here...`
-      );
-      setProcessing(false);
-    }, 2000);
-  };
-
-  const handleCropArea = () => {
-    setProcessing(true);
-    // Simulate crop area capture
-    setTimeout(() => {
-      setExtractedText(
-        "Extracted text from cropped area:\n\nSample text from selected area..."
-      );
-      setProcessing(false);
-    }, 1500);
   };
 
   const handleClipboardPaste = async () => {
@@ -83,13 +41,6 @@ const App = () => {
       for (const clipboardItem of clipboardItems) {
         for (const type of clipboardItem.types) {
           if (type.startsWith("image/")) {
-            setProcessing(true);
-            setTimeout(() => {
-              setExtractedText(
-                "Extracted text from clipboard image:\n\nSample text from pasted image..."
-              );
-              setProcessing(false);
-            }, 1500);
             return;
           }
         }
@@ -114,13 +65,19 @@ const App = () => {
           </div>
 
           <div className="action-buttons">
-            <button className="action-btn" onClick={handleFullScreen}>
+            <button
+              className="action-btn"
+              onClick={() => handleCapture("FULL_SCREEN_CAPTURE")}
+            >
               <span className="shortcut">Ctrl+[</span>
               <Monitor size={20} color="#70af59" />
               <div className="action-btn-title">Full Screen</div>
             </button>
 
-            <button className="action-btn" onClick={handleCropArea}>
+            <button
+              className="action-btn"
+              onClick={() => handleCapture("CROP_AREA_CAPTURE")}
+            >
               <span className="shortcut">Ctrl+]</span>
               <Crop size={20} color="#70af59" />
               <div className="action-btn-title">Crop Area</div>

@@ -68,13 +68,13 @@ function App() {
     }
   };
 
-  const handleCapture = async () => {
+  const handleCapture = async (isFullScreen: boolean) => {
     try {
       chrome.runtime.sendMessage(
         {
           type: "TAKE_SCREENSHOT",
           rect,
-          fullScreen: false,
+          fullScreen: isFullScreen,
         },
         (res) => {
           if (res?.success) {
@@ -159,10 +159,10 @@ function App() {
 
   useEffect(() => {
     const listener = (message: any) => {
-      if (message.type === "TAKE_SCREEN_SHORT") {
+      if (message.type === "CROP_AREA_CAPTURE") {
         setToggle(true);
       } else if (message.type === "FULL_SCREEN_CAPTURE") {
-        handleCapture();
+        handleCapture(true);
       } else if (message.type === "SCREEN_CAPTURE_RESULT") {
         const { dataUrl } = message;
         if (!dataUrl) {
@@ -214,7 +214,7 @@ function App() {
               height: rect.height,
             }}
           />
-          <button onClick={handleCapture} className="capture-btn">
+          <button onClick={() => handleCapture(false)} className="capture-btn">
             Capture & Extract Text
           </button>
         </div>
